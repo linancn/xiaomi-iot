@@ -10,11 +10,11 @@ export type DatabaseStatus = "connected" | "not_configured" | "error" | "empty";
 export type TelemetryPoint = {
   time: string;
   label: string;
-  temperature: number;
-  bedroomTemperature: number;
-  humidity: number;
-  acOn: number;
-  setpoint: number;
+  temperature: number | null;
+  humidity: number | null;
+  acOn: number | null;
+  setTemperature: number | null;
+  currentTemperature: number | null;
 };
 
 export type DashboardDevice = {
@@ -26,10 +26,19 @@ export type DashboardDevice = {
   model: string | null;
   status: "online" | "stale" | "offline";
   lastSeen: string | null;
+  lastChanged: string | null;
   temperature: number | null;
   humidity: number | null;
+  battery: number | null;
+  rssi: number | null;
   acPower: boolean | null;
-  setpoint: number | null;
+  hvacMode: string | null;
+  setTemperature: number | null;
+  currentTemperature: number | null;
+  fanMode: string | null;
+  swingMode: string | null;
+  temperatureUnit: string | null;
+  humidityUnit: string | null;
 };
 
 export type AutomationEvent = {

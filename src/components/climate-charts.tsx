@@ -6,7 +6,6 @@ import {
   CartesianGrid,
   Line,
   LineChart,
-  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -26,7 +25,19 @@ export function TemperatureChart({ series }: { series: TelemetryPoint[] }) {
       <LineChart data={series} margin={{ top: 16, right: 18, left: 0, bottom: 8 }}>
         <CartesianGrid stroke="#e2d6c1" strokeDasharray="4 4" />
         <XAxis dataKey="label" tick={{ fill: "#716a5e", fontSize: 12 }} />
-        <YAxis tick={{ fill: "#716a5e", fontSize: 12 }} domain={[20, 31]} />
+        <YAxis
+          yAxisId="temperature"
+          tick={{ fill: "#716a5e", fontSize: 12 }}
+          domain={[18, 32]}
+          unit="°C"
+        />
+        <YAxis
+          yAxisId="humidity"
+          orientation="right"
+          tick={{ fill: "#716a5e", fontSize: 12 }}
+          domain={[0, 100]}
+          unit="%"
+        />
         <Tooltip
           contentStyle={{
             background: "#fffaf0",
@@ -34,37 +45,48 @@ export function TemperatureChart({ series }: { series: TelemetryPoint[] }) {
             borderRadius: 8,
           }}
         />
-        <ReferenceLine
-          y={27.5}
-          stroke="#26221c"
-          strokeDasharray="5 5"
-          label={{ value: "trigger", fill: "#26221c", fontSize: 12 }}
-        />
         <Line
+          yAxisId="temperature"
           type="monotone"
           dataKey="temperature"
-          name="客厅温度"
+          name="温湿度计温度"
           stroke="#e4562e"
           strokeWidth={3}
           dot={false}
+          connectNulls
           activeDot={{ r: 5 }}
         />
         <Line
+          yAxisId="humidity"
           type="monotone"
-          dataKey="bedroomTemperature"
-          name="卧室温度"
+          dataKey="humidity"
+          name="湿度"
           stroke="#1288a8"
           strokeWidth={3}
           dot={false}
+          connectNulls
         />
         <Line
+          yAxisId="temperature"
           type="stepAfter"
-          dataKey="setpoint"
+          dataKey="setTemperature"
           name="设定温度"
           stroke="#2f8f62"
           strokeWidth={2}
           dot={false}
           strokeDasharray="3 6"
+          connectNulls
+        />
+        <Line
+          yAxisId="temperature"
+          type="monotone"
+          dataKey="currentTemperature"
+          name="空调当前温度"
+          stroke="#6f4fc4"
+          strokeWidth={2}
+          dot={false}
+          strokeDasharray="8 5"
+          connectNulls
         />
       </LineChart>
     </ResponsiveContainer>
@@ -104,6 +126,7 @@ export function RuntimeChart({ series }: { series: TelemetryPoint[] }) {
           stroke="#2f8f62"
           fill="url(#acOnFill)"
           strokeWidth={2}
+          connectNulls
         />
       </AreaChart>
     </ResponsiveContainer>

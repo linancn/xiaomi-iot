@@ -1,11 +1,13 @@
 # Xiaomi IoT Climate Dashboard
 
-Local-first dashboard for Xiaomi Home climate telemetry. The first version is optimized for home analysis:
+Local-first dashboard for Xiaomi Home telemetry collected through Home Assistant and stored in TimescaleDB.
 
-- temperature and humidity trends
-- air-conditioner power and setpoint timelines
-- threshold automation events
-- device freshness and ingestion health
+This first integration is intentionally narrow. It only collects and displays two Home Assistant devices in the `Jing 大屋` area:
+
+- `米家智能温湿度计机房`
+- `空调 巨省电Pro 1.5匹 超一级能效 2`
+
+Other rooms and Xiaomi devices are ignored.
 
 ## Stack
 
@@ -18,18 +20,6 @@ Local-first dashboard for Xiaomi Home climate telemetry. The first version is op
 
 OpenSearch is intentionally not included. This workload is time-series telemetry first, so PostgreSQL plus TimescaleDB is a smaller and faster baseline.
 
-## Quick Start
-
-```bash
-npm run docker:up
-npm run db:reset
-npm run dev
-```
-
-Open <http://localhost:3000>.
-
-If the database is not running, the dashboard falls back to deterministic demo data so the UI remains usable.
-
 ## Environment
 
 Copy `.env.example` if you need to recreate local settings:
@@ -38,18 +28,32 @@ Copy `.env.example` if you need to recreate local settings:
 cp .env.example .env.local
 ```
 
-`INGEST_TOKEN` protects the local ingestion endpoint when set. The checked-in example uses placeholder values only; `.env.local` is ignored by git.
+Set these values in `.env.local`:
+
+```text
+DATABASE_URL=postgres://xiaomi_iot:xiaomi_iot_password@localhost:5432/xiaomi_iot
+INGEST_TOKEN=change-this-local-token
+HOME_ASSISTANT_URL=http://192.168.1.241:8123
+HOME_ASSISTANT_TOKEN=replace-with-home-assistant-long-lived-access-token
+```
+
+Do not commit `.env.local`. It is ignored by git.
 
 ## Database
 
-Schema lives in `database/schema.sql`.
+Start TimescaleDB:
+
+```bash
+npm run docker:up
+```
+
+Initialize the schema:
 
 ```bash
 npm run db:init
-npm run db:seed
 ```
 
-The main tables are:
+The schema lives in `database/schema.sql`. Main tables:
 
 - `devices`
 - `telemetry_points`
@@ -57,37 +61,101 @@ The main tables are:
 
 `telemetry_points` is a Timescale hypertable keyed by `observed_at`.
 
-## Ingestion
+## Verify Home Assistant
 
-Normalized Home Assistant events can be posted to:
-
-```text
-POST /api/ingest/home-assistant
-Authorization: Bearer local-dev-token
-```
-
-Example:
+Verify the token can read states without printing the token:
 
 ```bash
-curl -X POST http://localhost:3000/api/ingest/home-assistant \
-  -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer local-dev-token' \
-  -d '{
-    "entityId": "sensor.living_room_temperature",
-    "deviceName": "客厅温湿度计",
-    "room": "客厅",
-    "kind": "thermometer",
-    "metric": "temperature",
-    "value": 27.8,
-    "unit": "degC"
-  }'
+node --input-type=module -e "
+import fs from 'node:fs';
+for (const line of fs.readFileSync('.env.local','utf8').split(/\\r?\\n/)) {
+  const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+  if (match) process.env[match[1]] ??= match[2].replace(/^['\\\"]|['\\\"]$/g, '');
+}
+const res = await fetch(new URL('/api/states', process.env.HOME_ASSISTANT_URL), {
+  headers: { Authorization: 'Bearer ' + process.env.HOME_ASSISTANT_TOKEN }
+});
+const body = await res.json();
+console.log({ status: res.status, ok: res.ok, count: Array.isArray(body) ? body.length : 0 });
+"
 ```
 
-For Home Assistant, use an automation or webhook to send one normalized payload per state change. The project keeps that adapter thin so Xiaomi/Home Assistant entity naming can be adjusted locally.
+Home Assistant registry data is read by `scripts/ingest-ha.mjs`. It first tries the REST registry paths and falls back to the Home Assistant WebSocket registry commands if those REST paths return 404.
 
-## Health
+## Run One Ingestion
+
+Run:
+
+```bash
+npm run ingest:ha
+```
+
+The script:
+
+- reads `HOME_ASSISTANT_URL`, `HOME_ASSISTANT_TOKEN`, and `DATABASE_URL` from `.env.local`
+- fetches states plus entity/device/area registries
+- matches `Jing 大屋` by registry area, allowing only whitespace normalization
+- matches the two target device names exactly inside that area
+- writes only those two devices and selected metrics to TimescaleDB
+- logs any expected metrics that Home Assistant does not currently expose
+
+Temperature values are normalized to Celsius for dashboard display. The original Home Assistant unit and metadata are preserved in each telemetry point's `raw` JSON.
+
+## Run The Dashboard
+
+```bash
+npm run dev
+```
+
+Open <http://localhost:3000>.
+
+The dashboard prefers TimescaleDB data from Home Assistant. If the database is unavailable or has no rows for the two target devices, it falls back to deterministic demo data.
+
+Useful checks:
 
 ```bash
 curl http://localhost:3000/api/health
 curl http://localhost:3000/api/dashboard
 ```
+
+## Periodic Collection
+
+For cron, run every five minutes:
+
+```cron
+*/5 * * * * cd /home/david/projects/xiaomi-iot && npm run ingest:ha >> logs/ingest-ha.log 2>&1
+```
+
+For systemd, create a service:
+
+```ini
+[Unit]
+Description=Xiaomi IoT Home Assistant ingestion
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/david/projects/xiaomi-iot
+ExecStart=/usr/bin/npm run ingest:ha
+```
+
+And a timer:
+
+```ini
+[Unit]
+Description=Run Xiaomi IoT ingestion every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=xiaomi-iot-ingest.service
+
+[Install]
+WantedBy=timers.target
+```
+
+## Current Limits
+
+- Only `Jing 大屋` is in scope.
+- Only `米家智能温湿度计机房` and `空调 巨省电Pro 1.5匹 超一级能效 2` are collected.
+- The script does not modify Home Assistant, Xiaomi Home, OAuth redirect URLs, automations, or device settings.
+- Missing metrics are reported in the ingestion log but do not fail the run.
