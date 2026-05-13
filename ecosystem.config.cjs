@@ -1,0 +1,41 @@
+module.exports = {
+  apps: [
+    {
+      name: "xiaomi-iot-web",
+      cwd: __dirname,
+      script: "node_modules/next/dist/bin/next",
+      args: "start -p 3000",
+      exec_mode: "fork",
+      instances: 1,
+      autorestart: true,
+      max_restarts: 10,
+      min_uptime: "10s",
+      watch: false,
+      env: {
+        NODE_ENV: "production",
+        PORT: "3000",
+      },
+      out_file: "logs/web-out.log",
+      error_file: "logs/web-error.log",
+      time: true,
+    },
+    {
+      name: "xiaomi-iot-ingest-ha",
+      cwd: __dirname,
+      script: "scripts/ingest-ha-loop.mjs",
+      exec_mode: "fork",
+      instances: 1,
+      autorestart: true,
+      max_restarts: 10,
+      min_uptime: "10s",
+      watch: false,
+      env: {
+        NODE_ENV: "production",
+        HA_INGEST_INTERVAL_MS: "300000",
+      },
+      out_file: "logs/ingest-ha-out.log",
+      error_file: "logs/ingest-ha-error.log",
+      time: true,
+    },
+  ],
+};

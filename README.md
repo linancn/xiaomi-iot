@@ -103,6 +103,8 @@ Temperature values are normalized to Celsius for dashboard display. The original
 
 ## Run The Dashboard
 
+For local development:
+
 ```bash
 npm run dev
 ```
@@ -118,39 +120,45 @@ curl http://localhost:3000/api/health
 curl http://localhost:3000/api/dashboard
 ```
 
-## Periodic Collection
+## PM2 Services
 
-For cron, run every five minutes:
+The production process setup is in `ecosystem.config.cjs`.
 
-```cron
-*/5 * * * * cd /home/david/projects/xiaomi-iot && mkdir -p logs && npm run ingest:ha >> logs/ingest-ha.log 2>&1
+It runs two PM2 apps:
+
+- `xiaomi-iot-web`: `next start -p 3000`
+- `xiaomi-iot-ingest-ha`: a resident loop that runs `scripts/ingest-ha.mjs` every five minutes
+
+Start TimescaleDB and build the app first:
+
+```bash
+npm run docker:up
+npm run db:init
+npm run build
 ```
 
-For systemd, create a service:
+Start the resident Node services:
 
-```ini
-[Unit]
-Description=Xiaomi IoT Home Assistant ingestion
-
-[Service]
-Type=oneshot
-WorkingDirectory=/home/david/projects/xiaomi-iot
-ExecStart=/usr/bin/npm run ingest:ha
+```bash
+npm run pm2:start
+pm2 save
 ```
 
-And a timer:
+Useful PM2 commands:
 
-```ini
-[Unit]
-Description=Run Xiaomi IoT ingestion every five minutes
+```bash
+npm run pm2:status
+npm run pm2:logs
+npm run pm2:reload
+npm run pm2:stop
+```
 
-[Timer]
-OnBootSec=2min
-OnUnitActiveSec=5min
-Unit=xiaomi-iot-ingest.service
+Logs are written under `logs/`, which is ignored by git.
 
-[Install]
-WantedBy=timers.target
+To make the saved PM2 process list restart after machine reboot, run the startup command printed by:
+
+```bash
+pm2 startup
 ```
 
 ## Current Limits

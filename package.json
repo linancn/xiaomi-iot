@@ -9,9 +9,15 @@
     "db:seed": "node scripts/seed-demo.mjs",
     "db:reset": "npm run db:init && npm run db:seed",
     "ingest:ha": "node scripts/ingest-ha.mjs",
+    "ingest:ha:loop": "node scripts/ingest-ha-loop.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "pm2:start": "pm2 start ecosystem.config.cjs",
+    "pm2:reload": "pm2 reload ecosystem.config.cjs --update-env",
+    "pm2:stop": "pm2 delete xiaomi-iot-web xiaomi-iot-ingest-ha",
+    "pm2:status": "pm2 status",
+    "pm2:logs": "pm2 logs xiaomi-iot-web xiaomi-iot-ingest-ha",
     "lint": "eslint"
   },
   "dependencies": {
