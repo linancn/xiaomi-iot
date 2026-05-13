@@ -123,7 +123,7 @@ curl http://localhost:3000/api/dashboard
 For cron, run every five minutes:
 
 ```cron
-*/5 * * * * cd /home/david/projects/xiaomi-iot && npm run ingest:ha >> logs/ingest-ha.log 2>&1
+*/5 * * * * cd /home/david/projects/xiaomi-iot && mkdir -p logs && npm run ingest:ha >> logs/ingest-ha.log 2>&1
 ```
 
 For systemd, create a service:
