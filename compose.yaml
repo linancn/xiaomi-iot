@@ -1,0 +1,26 @@
+services:
+  db:
+    image: timescale/timescaledb:2.27.0-pg18
+    container_name: xiaomi-iot-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-xiaomi_iot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-xiaomi_iot_password}
+      POSTGRES_DB: ${POSTGRES_DB:-xiaomi_iot}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - xiaomi-iot-db:/var/lib/postgresql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER:-xiaomi_iot} -d $${POSTGRES_DB:-xiaomi_iot}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  xiaomi-iot-db:
