@@ -6,14 +6,24 @@ import {
   CartesianGrid,
   Line,
   LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
+import { temperatureChartStyles } from "@/lib/chart-styles";
 import type { TelemetryPoint } from "@/lib/types";
 
-export function TemperatureChart({ series }: { series: TelemetryPoint[] }) {
+export function TemperatureChart({
+  series,
+  stopTemperature,
+  startTemperature,
+}: {
+  series: TelemetryPoint[];
+  stopTemperature: number;
+  startTemperature: number;
+}) {
   return (
     <ResponsiveContainer
       width="100%"
@@ -24,7 +34,12 @@ export function TemperatureChart({ series }: { series: TelemetryPoint[] }) {
     >
       <LineChart data={series} margin={{ top: 16, right: 18, left: 0, bottom: 8 }}>
         <CartesianGrid stroke="#e2d6c1" strokeDasharray="4 4" />
-        <XAxis dataKey="label" tick={{ fill: "#716a5e", fontSize: 12 }} />
+        <XAxis
+          dataKey="label"
+          tick={{ fill: "#716a5e", fontSize: 12 }}
+          minTickGap={24}
+          tickMargin={8}
+        />
         <YAxis
           yAxisId="temperature"
           tick={{ fill: "#716a5e", fontSize: 12 }}
@@ -45,13 +60,37 @@ export function TemperatureChart({ series }: { series: TelemetryPoint[] }) {
             borderRadius: 8,
           }}
         />
+        <ReferenceLine
+          yAxisId="temperature"
+          y={startTemperature}
+          stroke={temperatureChartStyles.startThreshold.color}
+          strokeWidth={temperatureChartStyles.startThreshold.strokeWidth}
+          strokeDasharray={temperatureChartStyles.startThreshold.strokeDasharray}
+          label={{
+            value: `启动 ${startTemperature}°C`,
+            fill: temperatureChartStyles.startThreshold.color,
+            fontSize: 12,
+          }}
+        />
+        <ReferenceLine
+          yAxisId="temperature"
+          y={stopTemperature}
+          stroke={temperatureChartStyles.stopThreshold.color}
+          strokeWidth={temperatureChartStyles.stopThreshold.strokeWidth}
+          strokeDasharray={temperatureChartStyles.stopThreshold.strokeDasharray}
+          label={{
+            value: `停止 ${stopTemperature}°C`,
+            fill: temperatureChartStyles.stopThreshold.color,
+            fontSize: 12,
+          }}
+        />
         <Line
           yAxisId="temperature"
           type="monotone"
           dataKey="temperature"
           name="温湿度计温度"
-          stroke="#e4562e"
-          strokeWidth={3}
+          stroke={temperatureChartStyles.temperature.color}
+          strokeWidth={temperatureChartStyles.temperature.strokeWidth}
           dot={false}
           connectNulls
           activeDot={{ r: 5 }}
@@ -61,8 +100,8 @@ export function TemperatureChart({ series }: { series: TelemetryPoint[] }) {
           type="monotone"
           dataKey="humidity"
           name="湿度"
-          stroke="#1288a8"
-          strokeWidth={3}
+          stroke={temperatureChartStyles.humidity.color}
+          strokeWidth={temperatureChartStyles.humidity.strokeWidth}
           dot={false}
           connectNulls
         />
@@ -71,10 +110,11 @@ export function TemperatureChart({ series }: { series: TelemetryPoint[] }) {
           type="stepAfter"
           dataKey="setTemperature"
           name="设定温度"
-          stroke="#2f8f62"
-          strokeWidth={2}
+          stroke={temperatureChartStyles.setTemperature.color}
+          strokeWidth={temperatureChartStyles.setTemperature.strokeWidth}
           dot={false}
-          strokeDasharray="3 6"
+          strokeDasharray={temperatureChartStyles.setTemperature.strokeDasharray}
+          strokeLinecap="round"
           connectNulls
         />
         <Line
@@ -82,10 +122,11 @@ export function TemperatureChart({ series }: { series: TelemetryPoint[] }) {
           type="monotone"
           dataKey="currentTemperature"
           name="空调当前温度"
-          stroke="#6f4fc4"
-          strokeWidth={2}
+          stroke={temperatureChartStyles.currentTemperature.color}
+          strokeWidth={temperatureChartStyles.currentTemperature.strokeWidth}
           dot={false}
-          strokeDasharray="8 5"
+          strokeDasharray={temperatureChartStyles.currentTemperature.strokeDasharray}
+          strokeLinecap="round"
           connectNulls
         />
       </LineChart>
@@ -110,7 +151,12 @@ export function RuntimeChart({ series }: { series: TelemetryPoint[] }) {
           </linearGradient>
         </defs>
         <CartesianGrid stroke="#e2d6c1" strokeDasharray="4 4" />
-        <XAxis dataKey="label" tick={{ fill: "#716a5e", fontSize: 12 }} />
+        <XAxis
+          dataKey="label"
+          tick={{ fill: "#716a5e", fontSize: 12 }}
+          minTickGap={24}
+          tickMargin={8}
+        />
         <YAxis hide domain={[0, 1]} />
         <Tooltip
           contentStyle={{

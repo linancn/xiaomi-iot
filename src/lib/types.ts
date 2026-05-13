@@ -17,6 +17,19 @@ export type TelemetryPoint = {
   currentTemperature: number | null;
 };
 
+export type DashboardTimeWindow = {
+  hours: number;
+  bucketMinutes: number;
+  start: string;
+  end: string;
+  timeZone: string;
+};
+
+export type ControlThresholds = {
+  stopTemperature: number;
+  startTemperature: number;
+};
+
 export type DashboardDevice = {
   source: string;
   externalId: string;
@@ -61,12 +74,19 @@ export type DashboardSummary = {
   todayTriggers: number;
   averageCooldownMinutes: number;
   comfortScore: number;
+  minTemperature: number | null;
+  maxTemperature: number | null;
+  averageTemperature: number | null;
+  sampleCount: number;
+  acRuntimePercent: number | null;
 };
 
 export type DashboardData = {
   generatedAt: string;
   dataSource: "database" | "demo";
   databaseStatus: DatabaseStatus;
+  timeWindow: DashboardTimeWindow;
+  thresholds: ControlThresholds;
   summary: DashboardSummary;
   series: TelemetryPoint[];
   devices: DashboardDevice[];

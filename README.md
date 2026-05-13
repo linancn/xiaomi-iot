@@ -113,6 +113,14 @@ Open <http://localhost:3000>.
 
 The dashboard prefers TimescaleDB data from Home Assistant. If the database is unavailable or has no rows for the two target devices, it falls back to deterministic demo data.
 
+The default analysis window is the most recent 3 hours. Use the window controls in the dashboard, or call the API with `hours`, for example:
+
+```bash
+curl "http://localhost:3000/api/dashboard?hours=6"
+```
+
+The API only queries and aggregates the selected window instead of loading all historical telemetry. Timestamps are displayed in `Asia/Shanghai`. Current control thresholds are `25°C` stop and `28°C` start.
+
 Useful checks:
 
 ```bash

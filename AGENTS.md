@@ -11,6 +11,7 @@ The current production goal is intentionally narrow:
 - collect real Home Assistant data for exactly two devices in `Jing 大屋`
 - store the data in local TimescaleDB
 - show those two devices on the Next.js dashboard
+- default analysis window is the latest 3 hours, with bounded backend aggregation for larger windows
 - keep the service running under PM2 on port `3000`
 
 Do not broaden the scope to whole-home discovery unless the user explicitly asks.
@@ -165,6 +166,13 @@ For `空调 巨省电Pro 1.5匹 超一级能效 2`:
 - `current_humidity` if available
 
 Temperature values are normalized to Celsius for dashboard use. Preserve original HA metadata in `telemetry_points.raw`.
+
+Current control strategy thresholds shown in the dashboard:
+
+- stop cooling at `25°C`
+- start cooling at `28°C`
+
+Do not hard-code a wider historical query. The dashboard API accepts `hours` and should query only the selected window with a reasonable `time_bucket` interval.
 
 ## Standard Commands
 

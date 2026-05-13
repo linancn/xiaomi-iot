@@ -1,21 +1,67 @@
 import type {
   AutomationEvent,
+  ControlThresholds,
   DashboardData,
   DashboardDevice,
   DatabaseStatus,
+  DashboardTimeWindow,
   TelemetryPoint,
 } from "./types";
 
 const now = new Date("2026-05-13T12:00:00+08:00");
+const DEFAULT_TIME_ZONE = "Asia/Shanghai";
+const THRESHOLDS: ControlThresholds = {
+  stopTemperature: 25,
+  startTemperature: 28,
+};
+
+function formatLabel(value: Date) {
+  return value.toLocaleTimeString("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: DEFAULT_TIME_ZONE,
+  });
+}
+
+function bucketMinutesForHours(hours: number) {
+  if (hours <= 3) {
+    return 5;
+  }
+  if (hours <= 12) {
+    return 10;
+  }
+  if (hours <= 48) {
+    return 30;
+  }
+  if (hours <= 168) {
+    return 60;
+  }
+  return 360;
+}
+
+function buildTimeWindow(hours: number): DashboardTimeWindow {
+  const bucketMinutes = bucketMinutesForHours(hours);
+
+  return {
+    hours,
+    bucketMinutes,
+    start: new Date(now.getTime() - hours * 60 * 60_000).toISOString(),
+    end: now.toISOString(),
+    timeZone: DEFAULT_TIME_ZONE,
+  };
+}
 
 function isoMinutesAgo(minutes: number) {
   return new Date(now.getTime() - minutes * 60_000).toISOString();
 }
 
-export function buildDemoSeries(): TelemetryPoint[] {
-  return Array.from({ length: 49 }, (_, index) => {
-    const minutesAgo = (48 - index) * 30;
-    const angle = (index / 48) * Math.PI * 2;
+export function buildDemoSeries(hours = 3): TelemetryPoint[] {
+  const bucketMinutes = bucketMinutesForHours(hours);
+  const pointCount = Math.max(2, Math.min(160, Math.floor((hours * 60) / bucketMinutes) + 1));
+
+  return Array.from({ length: pointCount }, (_, index) => {
+    const minutesAgo = (pointCount - 1 - index) * bucketMinutes;
+    const angle = (index / Math.max(1, pointCount - 1)) * Math.PI * 2;
     const dayHeat = Math.sin(angle - 0.8) * 1.8;
     const acCycle = index > 24 && index < 42 ? 1 : index > 10 && index < 15 ? 1 : 0;
     const coolingDrop = acCycle ? 1.2 + Math.sin(index / 3) * 0.25 : 0;
@@ -25,10 +71,7 @@ export function buildDemoSeries(): TelemetryPoint[] {
 
     return {
       time: isoMinutesAgo(minutesAgo),
-      label: new Date(now.getTime() - minutesAgo * 60_000).toLocaleTimeString("zh-CN", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      label: formatLabel(new Date(now.getTime() - minutesAgo * 60_000)),
       temperature: Number(temperature.toFixed(1)),
       humidity: Number(humidity.toFixed(0)),
       acOn: acCycle,
@@ -93,16 +136,27 @@ export function buildDemoAutomations(): AutomationEvent[] {
   return [];
 }
 
-export function buildDemoDashboardData(databaseStatus: DatabaseStatus = "not_configured"): DashboardData {
-  const series = buildDemoSeries();
+export function buildDemoDashboardData(
+  databaseStatus: DatabaseStatus = "not_configured",
+  hours = 3,
+): DashboardData {
+  const series = buildDemoSeries(hours);
   const devices = buildDemoDevices();
   const automations = buildDemoAutomations();
   const latest = series.at(-1);
+  const temperatureValues = series
+    .map((point) => point.temperature)
+    .filter((value): value is number => value !== null);
+  const acSamples = series
+    .map((point) => point.acOn)
+    .filter((value): value is number => value !== null);
 
   return {
     generatedAt: new Date().toISOString(),
     dataSource: "demo",
     databaseStatus,
+    timeWindow: buildTimeWindow(hours),
+    thresholds: THRESHOLDS,
     summary: {
       currentTemperature: latest?.temperature ?? 0,
       currentHumidity: latest?.humidity ?? 0,
@@ -112,6 +166,15 @@ export function buildDemoDashboardData(databaseStatus: DatabaseStatus = "not_con
         ? Math.round(automations.reduce((sum, item) => sum + item.cooldownMinutes, 0) / automations.length)
         : 0,
       comfortScore: 86,
+      minTemperature: temperatureValues.length ? Math.min(...temperatureValues) : null,
+      maxTemperature: temperatureValues.length ? Math.max(...temperatureValues) : null,
+      averageTemperature: temperatureValues.length
+        ? Number((temperatureValues.reduce((sum, value) => sum + value, 0) / temperatureValues.length).toFixed(1))
+        : null,
+      sampleCount: series.length,
+      acRuntimePercent: acSamples.length
+        ? Math.round((acSamples.filter((value) => value > 0).length / acSamples.length) * 100)
+        : null,
     },
     series,
     devices,
