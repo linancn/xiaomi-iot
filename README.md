@@ -35,9 +35,18 @@ DATABASE_URL=postgres://xiaomi_iot:xiaomi_iot_password@localhost:5432/xiaomi_iot
 INGEST_TOKEN=change-this-local-token
 HOME_ASSISTANT_URL=http://192.168.1.241:8123
 HOME_ASSISTANT_TOKEN=replace-with-home-assistant-long-lived-access-token
+DASHBOARD_PASSWORD=replace-with-fixed-dashboard-password
+DASHBOARD_AUTH_SECRET=replace-with-long-random-session-signing-secret
+DASHBOARD_COOKIE_SECURE=false
 ```
 
 Do not commit `.env.local`. It is ignored by git.
+
+`DASHBOARD_PASSWORD` enables the password gate for the dashboard and `/api/dashboard`.
+If it is empty or missing, the local dashboard remains open. For public exposure, set a
+strong fixed password and a long random `DASHBOARD_AUTH_SECRET`, then reload PM2.
+
+Set `DASHBOARD_COOKIE_SECURE=true` only when the public URL is served through HTTPS.
 
 ## Database
 
@@ -162,6 +171,13 @@ npm run pm2:stop
 ```
 
 Logs are written under `logs/`, which is ignored by git.
+
+After changing `.env.local`, reload PM2 so the new password/session settings are used:
+
+```bash
+npm run pm2:reload
+pm2 save
+```
 
 To make the saved PM2 process list restart after machine reboot, run the startup command printed by:
 

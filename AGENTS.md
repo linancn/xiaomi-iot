@@ -43,6 +43,7 @@ The registry REST paths may return `404` on this Home Assistant instance. The in
 ## Safety Rules
 
 - Never print `.env.local`, tokens, passwords, database credentials, or Home Assistant bearer tokens.
+- Never hard-code the public dashboard password in source. Use `.env.local` (`DASHBOARD_PASSWORD`).
 - Never commit `.env.local`, `logs/`, `.next/`, `node_modules/`, or generated screenshots.
 - Never change Home Assistant or Xiaomi Home OAuth redirect settings.
 - Xiaomi Home OAuth callback must stay `homeassistant.local`; do not change it to the NAS IP.
@@ -78,6 +79,9 @@ Resident services:
 
 - `src/app/page.tsx`: server-rendered dashboard page
 - `src/app/api/dashboard/route.ts`: dashboard JSON API
+- `src/app/login/page.tsx`: fixed-password login page
+- `src/app/api/auth/login/route.ts`: login endpoint that sets the dashboard auth cookie
+- `src/app/api/auth/logout/route.ts`: logout endpoint that clears the dashboard auth cookie
 - `src/app/api/health/route.ts`: health API
 - `src/app/api/ingest/home-assistant/route.ts`: normalized ingestion endpoint kept for compatibility
 - `src/lib/queries.ts`: DB-backed dashboard query logic and fallback selection
@@ -116,9 +120,14 @@ Known local docs that are relevant:
 - `INGEST_TOKEN`
 - `HOME_ASSISTANT_URL`
 - `HOME_ASSISTANT_TOKEN`
+- `DASHBOARD_PASSWORD` for public dashboard access
+- `DASHBOARD_AUTH_SECRET` for signing dashboard sessions
+- `DASHBOARD_COOKIE_SECURE`, set to `true` only when the public URL uses HTTPS
 - optionally `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT`
 
 Read `.env.local` only through scripts or shell snippets that do not echo secrets.
+
+If `DASHBOARD_PASSWORD` is missing, dashboard auth is disabled for local use. For public exposure, it must be set and PM2 must be reloaded.
 
 ## Data Model
 
