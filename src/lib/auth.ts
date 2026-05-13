@@ -84,6 +84,42 @@ export function dashboardAuthCookieOptions() {
   };
 }
 
+function firstHeaderValue(value: string | null) {
+  return value?.split(",")[0]?.trim() || "";
+}
+
+function configuredDashboardOrigin() {
+  const value = process.env.DASHBOARD_PUBLIC_URL?.trim();
+  if (!value) {
+    return "";
+  }
+
+  try {
+    return new URL(value).origin;
+  } catch {
+    return "";
+  }
+}
+
+export function dashboardRedirectUrl(request: Request, path: string) {
+  const configuredOrigin = configuredDashboardOrigin();
+  if (configuredOrigin) {
+    return new URL(path, configuredOrigin);
+  }
+
+  const requestUrl = new URL(request.url);
+  const host =
+    firstHeaderValue(request.headers.get("x-forwarded-host")) ||
+    firstHeaderValue(request.headers.get("host")) ||
+    requestUrl.host;
+  const protocol =
+    firstHeaderValue(request.headers.get("x-forwarded-proto")) ||
+    requestUrl.protocol.replace(":", "") ||
+    "http";
+
+  return new URL(path, `${protocol}://${host}`);
+}
+
 export function safeRedirectPath(value: FormDataEntryValue | string | null | undefined) {
   if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
     return "/";

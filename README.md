@@ -38,6 +38,7 @@ HOME_ASSISTANT_TOKEN=replace-with-home-assistant-long-lived-access-token
 DASHBOARD_PASSWORD=replace-with-fixed-dashboard-password
 DASHBOARD_AUTH_SECRET=replace-with-long-random-session-signing-secret
 DASHBOARD_COOKIE_SECURE=false
+DASHBOARD_PUBLIC_URL=https://your-dashboard.example:3000
 ```
 
 Do not commit `.env.local`. It is ignored by git.
@@ -47,6 +48,8 @@ If it is empty or missing, the local dashboard remains open. For public exposure
 strong fixed password and a long random `DASHBOARD_AUTH_SECRET`, then reload PM2.
 
 Set `DASHBOARD_COOKIE_SECURE=true` only when the public URL is served through HTTPS.
+Set `DASHBOARD_PUBLIC_URL` when the dashboard is behind a reverse proxy so login and
+logout redirects use the public HTTPS origin instead of the local backend origin.
 
 ## Database
 

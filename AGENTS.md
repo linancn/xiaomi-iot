@@ -123,6 +123,7 @@ Known local docs that are relevant:
 - `DASHBOARD_PASSWORD` for public dashboard access
 - `DASHBOARD_AUTH_SECRET` for signing dashboard sessions
 - `DASHBOARD_COOKIE_SECURE`, set to `true` only when the public URL uses HTTPS
+- `DASHBOARD_PUBLIC_URL` for reverse-proxy deployments, using the public HTTPS origin
 - optionally `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT`
 
 Read `.env.local` only through scripts or shell snippets that do not echo secrets.
