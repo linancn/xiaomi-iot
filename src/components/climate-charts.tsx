@@ -13,17 +13,67 @@ import {
   YAxis,
 } from "recharts";
 import { temperatureChartStyles } from "@/lib/chart-styles";
-import type { TelemetryPoint } from "@/lib/types";
+import type { DashboardTimeWindow, TelemetryPoint } from "@/lib/types";
+
+type ChartPoint = TelemetryPoint & {
+  timeMs: number;
+};
+
+function toChartData(series: TelemetryPoint[]): ChartPoint[] {
+  return series.map((point) => ({
+    ...point,
+    timeMs: new Date(point.time).getTime(),
+  }));
+}
+
+function timeDomain(timeWindow: DashboardTimeWindow): [number, number] {
+  return [new Date(timeWindow.start).getTime(), new Date(timeWindow.end).getTime()];
+}
+
+function timeTicks(timeWindow: DashboardTimeWindow) {
+  const [start, end] = timeDomain(timeWindow);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+    return [];
+  }
+
+  const tickCount = timeWindow.hours <= 3 ? 7 : 6;
+  const step = (end - start) / (tickCount - 1);
+  return Array.from({ length: tickCount }, (_, index) => Math.round(start + step * index));
+}
+
+function formatChartTime(value: number | string, timeWindow: DashboardTimeWindow) {
+  const date = new Date(Number(value));
+
+  return date.toLocaleString("zh-CN", {
+    month: timeWindow.hours > 24 ? "2-digit" : undefined,
+    day: timeWindow.hours > 24 ? "2-digit" : undefined,
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: timeWindow.timeZone,
+  });
+}
+
+const tooltipStyle = {
+  background: "#fffaf0",
+  border: "1px solid #d8cdb8",
+  borderRadius: 8,
+};
 
 export function TemperatureChart({
   series,
+  timeWindow,
   stopTemperature,
   startTemperature,
 }: {
   series: TelemetryPoint[];
+  timeWindow: DashboardTimeWindow;
   stopTemperature: number;
   startTemperature: number;
 }) {
+  const chartData = toChartData(series);
+  const domain = timeDomain(timeWindow);
+  const ticks = timeTicks(timeWindow);
+
   return (
     <ResponsiveContainer
       width="100%"
@@ -32,11 +82,16 @@ export function TemperatureChart({
       minHeight={0}
       initialDimension={{ width: 900, height: 360 }}
     >
-      <LineChart data={series} margin={{ top: 16, right: 18, left: 0, bottom: 8 }}>
+      <LineChart data={chartData} margin={{ top: 16, right: 18, left: 0, bottom: 8 }}>
         <CartesianGrid stroke="#e2d6c1" strokeDasharray="4 4" />
         <XAxis
-          dataKey="label"
+          allowDataOverflow
+          dataKey="timeMs"
+          domain={domain}
+          tickFormatter={(value) => formatChartTime(value, timeWindow)}
           tick={{ fill: "#716a5e", fontSize: 12 }}
+          ticks={ticks}
+          type="number"
           minTickGap={24}
           tickMargin={8}
         />
@@ -54,11 +109,8 @@ export function TemperatureChart({
           unit="%"
         />
         <Tooltip
-          contentStyle={{
-            background: "#fffaf0",
-            border: "1px solid #d8cdb8",
-            borderRadius: 8,
-          }}
+          contentStyle={tooltipStyle}
+          labelFormatter={(value) => formatChartTime(value, timeWindow)}
         />
         <ReferenceLine
           yAxisId="temperature"
@@ -92,7 +144,7 @@ export function TemperatureChart({
           stroke={temperatureChartStyles.temperature.color}
           strokeWidth={temperatureChartStyles.temperature.strokeWidth}
           dot={false}
-          connectNulls
+          isAnimationActive={false}
           activeDot={{ r: 5 }}
         />
         <Line
@@ -103,7 +155,7 @@ export function TemperatureChart({
           stroke={temperatureChartStyles.humidity.color}
           strokeWidth={temperatureChartStyles.humidity.strokeWidth}
           dot={false}
-          connectNulls
+          isAnimationActive={false}
         />
         <Line
           yAxisId="temperature"
@@ -115,7 +167,7 @@ export function TemperatureChart({
           dot={false}
           strokeDasharray={temperatureChartStyles.setTemperature.strokeDasharray}
           strokeLinecap="round"
-          connectNulls
+          isAnimationActive={false}
         />
         <Line
           yAxisId="temperature"
@@ -127,14 +179,24 @@ export function TemperatureChart({
           dot={false}
           strokeDasharray={temperatureChartStyles.currentTemperature.strokeDasharray}
           strokeLinecap="round"
-          connectNulls
+          isAnimationActive={false}
         />
       </LineChart>
     </ResponsiveContainer>
   );
 }
 
-export function RuntimeChart({ series }: { series: TelemetryPoint[] }) {
+export function RuntimeChart({
+  series,
+  timeWindow,
+}: {
+  series: TelemetryPoint[];
+  timeWindow: DashboardTimeWindow;
+}) {
+  const chartData = toChartData(series);
+  const domain = timeDomain(timeWindow);
+  const ticks = timeTicks(timeWindow);
+
   return (
     <ResponsiveContainer
       width="100%"
@@ -143,7 +205,7 @@ export function RuntimeChart({ series }: { series: TelemetryPoint[] }) {
       minHeight={0}
       initialDimension={{ width: 520, height: 230 }}
     >
-      <AreaChart data={series} margin={{ top: 12, right: 18, left: 0, bottom: 0 }}>
+      <AreaChart data={chartData} margin={{ top: 12, right: 18, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id="acOnFill" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor="#2f8f62" stopOpacity={0.65} />
@@ -152,18 +214,20 @@ export function RuntimeChart({ series }: { series: TelemetryPoint[] }) {
         </defs>
         <CartesianGrid stroke="#e2d6c1" strokeDasharray="4 4" />
         <XAxis
-          dataKey="label"
+          allowDataOverflow
+          dataKey="timeMs"
+          domain={domain}
+          tickFormatter={(value) => formatChartTime(value, timeWindow)}
           tick={{ fill: "#716a5e", fontSize: 12 }}
+          ticks={ticks}
+          type="number"
           minTickGap={24}
           tickMargin={8}
         />
         <YAxis hide domain={[0, 1]} />
         <Tooltip
-          contentStyle={{
-            background: "#fffaf0",
-            border: "1px solid #d8cdb8",
-            borderRadius: 8,
-          }}
+          contentStyle={tooltipStyle}
+          labelFormatter={(value) => formatChartTime(value, timeWindow)}
         />
         <Area
           type="stepAfter"
@@ -172,7 +236,7 @@ export function RuntimeChart({ series }: { series: TelemetryPoint[] }) {
           stroke="#2f8f62"
           fill="url(#acOnFill)"
           strokeWidth={2}
-          connectNulls
+          isAnimationActive={false}
         />
       </AreaChart>
     </ResponsiveContainer>

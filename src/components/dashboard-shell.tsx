@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Activity,
   AirVent,
@@ -69,6 +69,16 @@ function formatMetric(value: number | null, unit: string | null, digits = 1) {
     return "--";
   }
   return `${value.toFixed(digits)}${unit ? ` ${unit}` : ""}`;
+}
+
+function hasSeriesValue(point: DashboardData["series"][number]) {
+  return (
+    point.temperature !== null ||
+    point.humidity !== null ||
+    point.acOn !== null ||
+    point.setTemperature !== null ||
+    point.currentTemperature !== null
+  );
 }
 
 function statusClass(device: DashboardDevice) {
@@ -178,31 +188,63 @@ const RuntimeChart = dynamic(
 export function DashboardShell({ data: initialData }: DashboardShellProps) {
   const [data, setData] = useState(initialData);
   const [isLoadingWindow, setIsLoadingWindow] = useState(false);
+  const [pendingWindowHours, setPendingWindowHours] = useState<number | null>(null);
   const [windowError, setWindowError] = useState<string | null>(null);
+  const activeRequestId = useRef(0);
+  const activeAbortController = useRef<AbortController | null>(null);
   const thermometer = data.devices.find((device) => device.kind === "thermometer");
   const airConditioner = data.devices.find((device) => device.kind === "air_conditioner");
   const sourceName = data.dataSource === "database" ? "Home Assistant" : "Demo fallback";
   const storageName = data.dataSource === "database" ? "TimescaleDB" : "Local demo";
   const temperatureUnit = thermometer?.temperatureUnit ?? airConditioner?.temperatureUnit ?? "°C";
   const timeZone = data.timeWindow.timeZone;
+  const coveredSeries = data.series.filter(hasSeriesValue);
+  const coveragePercent = data.series.length
+    ? Math.round((coveredSeries.length / data.series.length) * 100)
+    : 0;
+  const coverageStart = coveredSeries[0]?.time ?? null;
+  const coverageEnd = coveredSeries.at(-1)?.time ?? null;
+  const chartKey = `${data.generatedAt}:${data.timeWindow.hours}:${data.timeWindow.start}:${data.timeWindow.end}`;
 
   async function loadWindow(hours: number) {
+    const requestId = activeRequestId.current + 1;
+    activeRequestId.current = requestId;
+    activeAbortController.current?.abort();
+    const abortController = new AbortController();
+    activeAbortController.current = abortController;
+
     setIsLoadingWindow(true);
+    setPendingWindowHours(hours);
     setWindowError(null);
 
     try {
-      const response = await fetch(`/api/dashboard?hours=${hours}`, { cache: "no-store" });
+      const response = await fetch(`/api/dashboard?hours=${hours}&request=${requestId}`, {
+        cache: "no-store",
+        signal: abortController.signal,
+      });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
 
       const nextData = (await response.json()) as DashboardData;
+      if (requestId !== activeRequestId.current) {
+        return;
+      }
+
       setData(nextData);
       window.history.replaceState(null, "", `?hours=${nextData.timeWindow.hours}`);
     } catch (error) {
+      if (abortController.signal.aborted || requestId !== activeRequestId.current) {
+        return;
+      }
+
       setWindowError(error instanceof Error ? error.message : "窗口数据加载失败");
     } finally {
-      setIsLoadingWindow(false);
+      if (requestId === activeRequestId.current) {
+        setIsLoadingWindow(false);
+        setPendingWindowHours(null);
+        activeAbortController.current = null;
+      }
     }
   }
 
@@ -255,7 +297,7 @@ export function DashboardShell({ data: initialData }: DashboardShellProps) {
       value: `${data.timeWindow.bucketMinutes} 分钟`,
     },
     {
-      label: "时间点",
+      label: "有效采样桶",
       value: String(data.summary.sampleCount),
     },
   ];
@@ -327,10 +369,13 @@ export function DashboardShell({ data: initialData }: DashboardShellProps) {
               <h2 className="mt-1 text-2xl font-black">
                 近 {formatWindowLabel(data.timeWindow.hours)} 温湿度趋势
               </h2>
+              <p className="mt-2 text-xs font-semibold text-[#716a5e]">
+                时间轴：{formatTime(data.timeWindow.start, timeZone)} - {formatTime(data.timeWindow.end, timeZone)}
+              </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
               {windowOptions.map((option) => {
-                const isActive = option.hours === data.timeWindow.hours;
+                const isActive = option.hours === (pendingWindowHours ?? data.timeWindow.hours);
                 return (
                   <button
                     key={option.hours}
@@ -358,6 +403,22 @@ export function DashboardShell({ data: initialData }: DashboardShellProps) {
                 刷新
               </button>
             </div>
+          </div>
+          <div
+            className={`mt-3 rounded-[8px] border px-3 py-2 text-xs font-semibold ${
+              coveredSeries.length === 0 || coveragePercent < 90
+                ? "border-[#d7a646] bg-[#fff4d8] text-[#716a5e]"
+                : "border-[#d8cdb8] bg-[#f8efdf] text-[#716a5e]"
+            }`}
+          >
+            {coveredSeries.length === 0 ? (
+              "当前时间窗口内没有有效采样，图表会保留完整时间轴并显示为空。"
+            ) : (
+              <>
+                数据覆盖：{formatTime(coverageStart, timeZone)} - {formatTime(coverageEnd, timeZone)}，
+                {coveredSeries.length}/{data.series.length} 个时间桶（{coveragePercent}%）。
+              </>
+            )}
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold">
             <LegendItem
@@ -400,7 +461,9 @@ export function DashboardShell({ data: initialData }: DashboardShellProps) {
           </div>
           <div className="mt-4 h-[360px] w-full">
             <TemperatureChart
+              key={`temperature-${chartKey}`}
               series={data.series}
+              timeWindow={data.timeWindow}
               stopTemperature={data.thresholds.stopTemperature}
               startTemperature={data.thresholds.startTemperature}
             />
@@ -437,7 +500,7 @@ export function DashboardShell({ data: initialData }: DashboardShellProps) {
             <Activity size={24} className="text-[#2f8f62]" />
           </div>
           <div className="mt-4 h-[230px]">
-            <RuntimeChart series={data.series} />
+            <RuntimeChart key={`runtime-${chartKey}`} series={data.series} timeWindow={data.timeWindow} />
           </div>
         </div>
 

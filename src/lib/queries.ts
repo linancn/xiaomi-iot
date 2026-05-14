@@ -204,8 +204,8 @@ async function fetchDatabaseData(options: Required<DashboardQueryOptions>): Prom
   const hours = normalizeDashboardHours(options.hours);
   const bucketMinutes = bucketMinutesForHours(hours);
   const timeWindow = buildTimeWindow(hours, bucketMinutes);
-  const windowSeconds = Math.round(hours * 60 * 60);
   const bucketInterval = `${bucketMinutes} minutes`;
+  const bucketSeconds = bucketMinutes * 60;
 
   const targetDevicesSql = `
     SELECT *
@@ -272,35 +272,73 @@ async function fetchDatabaseData(options: Required<DashboardQueryOptions>): Prom
     ),
     pool.query<SeriesRow>(
       `
-        WITH target_devices AS (${targetDevicesSql})
+        WITH target_devices AS (${targetDevicesSql}),
+        params AS (
+          SELECT
+            $3::timestamptz AS start_at,
+            $4::timestamptz AS end_at,
+            $5::interval AS bucket_interval,
+            $6::double precision AS bucket_seconds
+        ),
+        buckets AS (
+          SELECT generate_series(params.start_at, params.end_at, params.bucket_interval) AS bucket
+          FROM params
+        ),
+        aggregated AS (
+          SELECT
+            params.start_at
+              + (
+                floor(extract(epoch from (tp.observed_at - params.start_at)) / params.bucket_seconds)::int
+                * params.bucket_interval
+              ) AS bucket,
+            AVG(tp.value_double) FILTER (
+              WHERE d.kind = 'thermometer' AND tp.metric = 'temperature'
+            ) AS temperature,
+            AVG(tp.value_double) FILTER (
+              WHERE d.kind = 'thermometer' AND tp.metric = 'humidity'
+            ) AS humidity,
+            MAX(tp.value_double) FILTER (
+              WHERE d.kind = 'air_conditioner' AND tp.metric IN ('ac_power', 'power')
+            ) AS ac_on,
+            AVG(tp.value_double) FILTER (
+              WHERE d.kind = 'air_conditioner'
+                AND tp.metric IN ('set_temperature', 'setpoint', 'target_temperature')
+            ) AS set_temperature,
+            AVG(tp.value_double) FILTER (
+              WHERE d.kind = 'air_conditioner' AND tp.metric = 'current_temperature'
+            ) AS current_temperature
+          FROM params
+          JOIN target_devices d ON TRUE
+          JOIN telemetry_points tp
+            ON tp.source = d.source
+            AND tp.external_id = d.external_id
+          WHERE tp.observed_at >= params.start_at
+            AND tp.observed_at <= params.end_at
+            AND tp.value_double IS NOT NULL
+            AND tp.metric IN (
+              'temperature',
+              'humidity',
+              'ac_power',
+              'power',
+              'set_temperature',
+              'setpoint',
+              'target_temperature',
+              'current_temperature'
+            )
+          GROUP BY 1
+        )
         SELECT
-          time_bucket($3::interval, tp.observed_at) AS bucket,
-          AVG(tp.value_double) FILTER (
-            WHERE d.kind = 'thermometer' AND tp.metric = 'temperature'
-          ) AS temperature,
-          AVG(tp.value_double) FILTER (
-            WHERE d.kind = 'thermometer' AND tp.metric = 'humidity'
-          ) AS humidity,
-          MAX(tp.value_double) FILTER (
-            WHERE d.kind = 'air_conditioner' AND tp.metric IN ('ac_power', 'power')
-          ) AS ac_on,
-          AVG(tp.value_double) FILTER (
-            WHERE d.kind = 'air_conditioner'
-              AND tp.metric IN ('set_temperature', 'setpoint', 'target_temperature')
-          ) AS set_temperature,
-          AVG(tp.value_double) FILTER (
-            WHERE d.kind = 'air_conditioner' AND tp.metric = 'current_temperature'
-          ) AS current_temperature
-        FROM target_devices d
-        JOIN telemetry_points tp
-          ON tp.source = d.source
-          AND tp.external_id = d.external_id
-        WHERE tp.observed_at >= NOW() - ($4::int * INTERVAL '1 second')
-          AND tp.value_double IS NOT NULL
-        GROUP BY bucket
-        ORDER BY bucket
+          buckets.bucket,
+          aggregated.temperature,
+          aggregated.humidity,
+          aggregated.ac_on,
+          aggregated.set_temperature,
+          aggregated.current_temperature
+        FROM buckets
+        LEFT JOIN aggregated ON aggregated.bucket = buckets.bucket
+        ORDER BY buckets.bucket
       `,
-      [TARGET_SCOPE, TARGET_DEVICE_NAMES, bucketInterval, windowSeconds],
+      [TARGET_SCOPE, TARGET_DEVICE_NAMES, timeWindow.start, timeWindow.end, bucketInterval, bucketSeconds],
     ),
     pool.query<AutomationRow>(`
       SELECT
@@ -341,6 +379,14 @@ async function fetchDatabaseData(options: Required<DashboardQueryOptions>): Prom
     .map((point) => point.temperature)
     .filter((value): value is number => value !== null);
   const acSamples = series.map((point) => point.acOn).filter((value): value is number => value !== null);
+  const validSamples = series.filter(
+    (point) =>
+      point.temperature !== null ||
+      point.humidity !== null ||
+      point.acOn !== null ||
+      point.setTemperature !== null ||
+      point.currentTemperature !== null,
+  );
 
   return {
     generatedAt: new Date().toISOString(),
@@ -365,7 +411,7 @@ async function fetchDatabaseData(options: Required<DashboardQueryOptions>): Prom
       averageTemperature: temperatureValues.length
         ? roundMetric(temperatureValues.reduce((sum, value) => sum + value, 0) / temperatureValues.length)
         : null,
-      sampleCount: series.length,
+      sampleCount: validSamples.length,
       acRuntimePercent: acSamples.length
         ? Math.round((acSamples.filter((value) => value > 0).length / acSamples.length) * 100)
         : null,
